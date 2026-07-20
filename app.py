@@ -653,11 +653,12 @@ def create_app():
 
 if __name__ == '__main__':
     from waitress import serve
+    port = int(os.environ.get('PORT', 5000))
     print("="*60)
     print(" 美线促销监控看板 - 启动中...")
     print("="*60)
     load_data()
-    print(f"[{datetime.now()}] ✅ 服务启动! http://127.0.0.1:5000")
+    print(f"[{datetime.now()}] ✅ 服务启动! http://0.0.0.0:{port}")
     print(f"[{datetime.now()}] ⚡ 生产级 Waitress 服务器运行中")
     print("="*60)
-    serve(app, host='0.0.0.0', port=5000, threads=8)
+    serve(app, host='0.0.0.0', port=port, threads=8)
