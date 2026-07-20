@@ -668,7 +668,7 @@ async function rTDisc() {
 async function rDSku() {
   const d = await api('/api/detail_sku');
   if(!d.length) return rEmpty();
-  rt(['按天','Listing标识','最早SKU','是否活动','比价类型','活动标识','SPEND$','Total ads Sales$','Total ads Units','IMPRESSIONS','CLICKS','页面浏览次数','已订购商品数量','已订购商品销售额','促销%','营销%','折扣%','funding%','CTR%','T-CVR%','T-CR%','$CPC','ACOS%','ROAS','$CPO','广告直购销额%'],
+  rt(['按天','Listing标识','最早SKU','是否活动','比价类型','活动标识','RRP','实际成交价','funding','SPEND$','Total ads Sales$','Total ads Units','IMPRESSIONS','CLICKS','页面浏览次数','已订购商品数量','已订购商品销售额','促销%','营销%','折扣%','funding%','CTR%','T-CVR%','T-CR%','$CPC','ACOS%','ROAS','$CPO','广告直购销额%'],
     d, ['促销%','营销%','折扣%','funding%','CTR%','T-CVR%','T-CR%','ACOS%','广告直购销额%']);
 }
 
