@@ -10,7 +10,8 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-BASE_DIR = r'C:\Users\thinkpad\Desktop\促销数据\美线促销监控'
+# 自动适配路径（Windows 本地 / Render Linux 通用）
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PARQUET_PATH = os.path.join(BASE_DIR, 'data.parquet')
 FILTER_OPTS_PATH = os.path.join(BASE_DIR, 'filter_opts.json')
 
