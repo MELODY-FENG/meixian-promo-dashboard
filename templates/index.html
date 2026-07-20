@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>美线促销输出 | 按天监控</title>
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+:root {
+  --bg: #f0f2f5; --card-bg: #fff;
+  --primary: #1677ff; --success: #52c41a; --warning: #faad14; --danger: #ff4d4f;
+  --text: #1f1f1f; --text2: #666; --border: #e8e8e8;
+  --radius: 10px; --shadow: 0 1px 6px rgba(0,0,0,0.06);
+  --header-h: 56px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* ====== ① 置顶悬浮冻结：Header + 筛选栏 ====== */
+.sticky-top {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  background: var(--card-bg);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+}
+.header {
+  background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+  color: #fff; padding: 10px 20px; height: var(--header-h);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.header h1 { font-size: 17px; font-weight: 700; }
+.header .sub { font-size: 11px; opacity: .8; }
+
+/* ====== ② 筛选组件两派分区 + 绝对统一大小 ====== */
+.filter-bar {
+  padding: 6px 14px 8px; border-bottom: 1px solid var(--border);
+  background: var(--card-bg);
+}
+.filter-bar .ft { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
+
+/* 两派分区 */
+.filter-section { display: flex; gap: 12px; margin-bottom: 4px; }
+.filter-group-box {
+  flex: 1; background: #f8f9fb; border-radius: 6px; padding: 6px 10px;
+  border: 1px solid #eef0f4;
+}
+.filter-group-box .group-label {
+  font-size: 10px; font-weight: 600; color: var(--text2); margin-bottom: 4px;
+  display: flex; align-items: center; gap: 4px;
+}
+.filter-grid { display: grid; gap: 4px; }
+.filter-grid-5 { grid-template-columns: repeat(5, 1fr); }
+.filter-grid-2 { grid-template-columns: repeat(2, 1fr); }
+.filter-col label { display: block; font-size: 9.5px; color: var(--text2); margin-bottom: 1px; font-weight: 500; white-space: nowrap; }
+
+/* ===== 核心：输入框 100% 统一 ===== */
+.filter-control {
+  display: block; width: 100%; height: 28px; padding: 0 6px;
+  border: 1px solid #d9d9d9; border-radius: 4px;
+  font-size: 11px; line-height: 26px; background: #fff;
+  color: var(--text); box-sizing: border-box;
+  outline: none; transition: border-color .2s, box-shadow .2s;
+}
+.filter-control:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(22,119,255,0.1); }
+input.filter-control { line-height: normal; }
+
+/* ===== Select2 容器 ===== */
+.select2-container { width: 100% !important; }
+.select2-container--default .select2-selection--multiple {
+  display: flex !important; align-items: center !important;
+  min-height: 28px !important; height: auto !important;
+  border: 1px solid #d9d9d9 !important; border-radius: 4px !important;
+  background: #fff !important; cursor: pointer !important;
+  box-sizing: border-box !important; outline: none !important;
+}
+.select2-container--default.select2-container--focus .select2-selection--multiple {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px rgba(22,119,255,0.1) !important;
+}
+/* 选中标签 */
+.select2-container--default .select2-selection--multiple .select2-selection__choice {
+  margin: 1px 2px !important; padding: 0 6px !important;
+  line-height: 18px !important; font-size: 10px !important;
+  background: #e6f0ff !important; border: 1px solid #b8d4ff !important;
+  border-radius: 3px !important; white-space: nowrap !important;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+  color: #999 !important; font-size: 12px !important; margin-right: 2px !important;
+}
+/* 输入框内部 */
+.select2-container--default .select2-selection--multiple .select2-selection__rendered {
+  padding: 1px 4px !important; display: flex !important; align-items: center !important; flex-wrap: wrap !important;
+}
+.select2-container--default .select2-search--inline {
+  float: none !important; display: inline-flex !important; align-items: center !important;
+}
+.select2-container--default .select2-search--inline .select2-search__field {
+  font-size: 11px !important; margin: 0 !important; padding: 0 !important;
+  height: 22px !important; line-height: 22px !important;
+  border: none !important; outline: none !important;
+  background: transparent !important;
+}
+/* 占位符 */
+.select2-container--default .select2-selection--multiple .select2-selection__placeholder {
+  font-size: 11px !important; color: #bbb !important; margin-top: 0 !important;
+}
+/* 下拉面板 */
+.select2-dropdown { border-color: #d9d9d9 !important; border-radius: 4px !important; box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important; }
+.select2-results__option { font-size: 11px !important; padding: 4px 8px !important; }
+.select2-container--default .select2-results__option--highlighted[aria-selected] { background: #e6f0ff !important; color: var(--text) !important; }
+.select2-container--default .select2-results__option[aria-selected=true] { background: #f0f5ff !important; }
+
+.filter-actions { display: flex; gap: 5px; align-items: center; margin-top: 5px; flex-wrap: wrap; }
+
+/* === 终极补丁：Select2 容器绝对锁高 28px === */
+.select2-container .select2-selection--multiple { min-height: 28px !important; height: 28px !important; }
+.select2-container--default .select2-selection--multiple .select2-selection__rendered { min-height: 26px !important; }
+.btn {
+  padding: 4px 12px; border: none; border-radius: 5px; cursor: pointer;
+  font-size: 11px; font-weight: 500; transition: all .2s; height: 28px; line-height: 20px;
+}
+.btn-p { background: var(--primary); color: #fff; }
+.btn-p:hover { background: #4096ff; }
+.btn-d { background: #f5f5f5; color: var(--text); border: 1px solid var(--border); }
+.btn-d:hover { background: #e8e8e8; }
+#filterStatus { font-size: 10px; color: var(--text2); }
+
+/* ====== 主体内容 (避开置顶, JS动态计算) ====== */
+.container { max-width: 1600px; margin: 0 auto; padding: 10px; }
+
+/* Cards */
+.card {
+  background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 10px; margin-bottom: 10px;
+}
+.card-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+
+/* Charts - ③ 全去网格线 */
+.chart-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.chart-box { position: relative; height: 250px; }
+.chart-box canvas { width: 100% !important; height: 100% !important; }
+.chart-box-tall { position: relative; height: 350px; }
+
+/* Stats */
+.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; margin-bottom: 10px; }
+.stat-card { background: linear-gradient(135deg, #fafbff, #fff); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px; text-align: center; border-left: 3px solid var(--primary); }
+.stat-card .v { font-size: 20px; font-weight: 700; line-height: 1.2; }
+.stat-card .l { font-size: 10px; color: var(--text2); margin-top: 2px; }
+
+/* Tabs */
+.tabs { display: flex; gap: 2px; margin-bottom: 6px; flex-wrap: wrap; }
+.tab {
+  padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 11px;
+  background: #f5f5f5; color: var(--text2); border: none; transition: all .2s;
+}
+.tab.act { background: var(--primary); color: #fff; }
+.tab:hover:not(.act) { background: #e8e8e8; }
+
+/* ====== ④ 表格条件格式 ====== */
+.tw { overflow-x: auto; max-height: 520px; overflow-y: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 10px; }
+thead th {
+  background: #f0f4ff; padding: 5px 6px; text-align: left; font-weight: 600;
+  border-bottom: 2px solid var(--border); white-space: nowrap;
+  position: sticky; top: 0; z-index: 2; font-size: 10px; color: #1f1f1f;
+}
+thead th:first-child { border-radius: 4px 0 0 0; }
+thead th:last-child { border-radius: 0 4px 0 0; }
+tbody td { padding: 4px 6px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
+tbody tr:nth-child(even) { background: #fafcff; }
+tbody tr:hover { background: #e6f0ff !important; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* 环比色阶 */
+.pct-up { color: var(--success); font-weight: 600; }
+.pct-down { color: var(--danger); font-weight: 600; }
+.pct-flat { color: var(--text2); }
+
+/* 迷你进度条 */
+.bar-cell { position: relative; padding-right: 20px !important; }
+.bar-bg { position: absolute; left: 6px; bottom: 2px; height: 3px; border-radius: 2px; opacity: 0.3; }
+.bar-fg { position: absolute; left: 6px; bottom: 2px; height: 3px; border-radius: 2px; }
+
+/* Loading */
+.loading { text-align: center; padding: 25px; color: var(--text2); }
+.loading .sp { display: inline-block; width: 22px; height: 22px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; margin-bottom: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width:900px) { .chart-grid2 { grid-template-columns:1fr; } .filter-grid { grid-template-columns:repeat(2,1fr); } }
+::-webkit-scrollbar { height: 5px; width: 5px; }
+::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- 置顶悬浮冻结区域 -->
+<div class="sticky-top">
+  <div class="header">
+    <div><h1>📊 美线促销输出 · 按天监控</h1><div class="sub" id="headerInfo">加载中...</div></div>
+    <div style="font-size:10px;opacity:.6;" id="headerTime"></div>
+  </div>
+  <div class="filter-bar">
+    <div class="ft">🎯 筛选 <span id="filterStatus"></span></div>
+    <div class="filter-section">
+      <div class="filter-group-box">
+        <div class="group-label">📋 基础信息</div>
+        <div class="filter-grid filter-grid-5">
+          <div class="filter-col"><label>业务组</label><select id="f_业务组" class="filter-control" multiple style="display:none"></select></div>
+          <div class="filter-col"><label>三级分类</label><select id="f_三级分类" class="filter-control" multiple style="display:none"></select></div>
+          <div class="filter-col"><label>BU</label><select id="f_BU" class="filter-control" multiple style="display:none"></select></div>
+          <div class="filter-col"><label>最早SKU</label><input id="f_最早SKU" class="filter-control" placeholder="逗号分隔"></div>
+          <div class="filter-col"><label>Listing</label><input id="f_Listing标识" class="filter-control" placeholder="逗号分隔"></div>
+        </div>
+      </div>
+      <div class="filter-group-box" style="flex:0 0 260px;">
+        <div class="group-label">📆 时间维度</div>
+        <div class="filter-grid filter-grid-2">
+          <div class="filter-col"><label>月</label><select id="f_月" class="filter-control" multiple style="display:none"></select></div>
+          <div class="filter-col"><label>周</label><select id="f_周" class="filter-control" multiple style="display:none"></select></div>
+        </div>
+      </div>
+    </div>
+    <div class="filter-actions">
+      <button class="btn btn-p" onclick="applyFilters()">✅ 确认</button>
+      <button class="btn btn-d" onclick="resetFilters()">🔄 重置</button>
+      <button class="btn btn-d" onclick="toggleAll('f_业务组')">⇄ 业务组</button>
+      <button class="btn btn-d" onclick="toggleAll('f_三级分类')">⇄ 分类</button>
+      <button class="btn btn-d" onclick="toggleAll('f_周')">⇄ 周</button>
+      <button class="btn btn-d" onclick="toggleAll('f_月')">⇄ 月</button>
+      <button class="btn" style="background:#52c41a;color:#fff;margin-left:auto;" onclick="exportXlsx()">📥 导出 xlsx</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <!-- KPI -->
+  <div class="stats-row" id="statsRow"></div>
+
+  <!-- 图表区 -->
+  <div class="card">
+    <div class="card-title">📈 促销周趋势分析</div>
+    <div class="chart-grid2">
+      <div class="chart-box"><canvas id="ch1"></canvas></div>
+      <div class="chart-box"><canvas id="ch2"></canvas></div>
+      <div class="chart-box"><canvas id="ch3"></canvas></div>
+      <div class="chart-box"><canvas id="ch4"></canvas></div>
+    </div>
+  </div>
+
+  <!-- 表格区 -->
+  <div class="card">
+    <div class="card-title">📋 所有看板 <span style="font-size:10px;color:var(--text2);font-weight:400;">点击标签切换</span></div>
+    <div class="tabs" id="tabBar">
+      <button class="tab act" onclick="sw('big',this)">大数汇总</button>
+      <button class="tab" onclick="sw('disc',this)">折扣区间</button>
+      <button class="tab" onclick="sw('promo',this)">促销汇总</button>
+      <button class="tab" onclick="sw('up',this)">上架汇总</button>
+      <button class="tab" onclick="sw('tcat',this)">三级分类趋势📈</button>
+      <button class="tab" onclick="sw('tsku',this)">SKU趋势📈</button>
+      <button class="tab" onclick="sw('tdisc',this)">折扣区间趋势📈</button>
+      <button class="tab" onclick="sw('dsku',this)">SKU明细</button>
+      <button class="tab" onclick="sw('dlist',this)">Listing明细</button>
+    </div>
+    <div class="tw" id="tabContent">
+      <div class="loading"><div class="sp"></div><div>加载中...</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let CF = {}, CT = 'big', CI = {};
+
+// ====== 条件格式工具 ======
+function fmtPct(v) {
+  if (v === null || v === undefined || v === '') return '<span class="num">-</span>';
+  const n = parseFloat(v);
+  if (isNaN(n)) return '<span class="num">-</span>';
+  let cls = '';
+  // 环比类：正绿负红
+  if (v.toString().includes('环比') || v.toString().includes('环比%')) {
+    if (n > 0) cls = 'pct-up';
+    else if (n < 0) cls = 'pct-down';
+    else cls = 'pct-flat';
+  }
+  // ACOS% 越高越差(红), ROAS越高越好(绿)
+  // 通用色阶: 绿好红差
+  return `<span class="num ${cls}">${n > 0 ? '▲' : n < 0 ? '▼' : ''}${n.toFixed(1)}%</span>`;
+}
+
+function fmtNum(v, colName) {
+  if (v === null || v === undefined || v === '') return '<span class="num">-</span>';
+  const n = parseFloat(v);
+  if (isNaN(n)) return `<span>${v}</span>`;
+  // 生成迷你进度条色阶 (基于数值范围)
+  const isPctCol = colName && (colName.includes('%') || colName.includes('环比'));
+  const isMoney = colName && (colName.includes('$') || colName.includes('费') || colName.includes('销额') || colName.includes('SPEND'));
+  const isCount = colName && (colName.includes('计数') || colName.includes('数量') || colName.includes('Orders') || colName.includes('Units') || colName.includes('IMPRESSIONS') || colName.includes('CLICKS') || colName.includes('浏览次数'));
+
+  let display = '';
+  if (Math.abs(n) >= 100000) display = `${(n/10000).toFixed(0)}万`;
+  else if (Math.abs(n) >= 10000) display = `${(n/10000).toFixed(1)}万`;
+  else if (Number.isInteger(n)) display = n.toLocaleString();
+  else display = n.toFixed(2);
+
+  // 百分比色阶背景
+  if (isPctCol) {
+    const absN = Math.abs(n);
+    let bg = '';
+    if (n > 0) {
+      if (n > 30) bg = 'background:#f5222d22';
+      else if (n > 15) bg = 'background:#fa8c1622';
+      else bg = 'background:#52c41a22';
+    } else if (n < 0) bg = 'background:#1677ff22';
+    let arrow = n > 0 ? '▲' : n < 0 ? '▼' : '';
+    let color = n > 0 ? 'color:#52c41a;font-weight:600' : n < 0 ? 'color:#ff4d4f;font-weight:600' : '';
+    return `<span class="num" style="${bg}${color};padding:1px 4px;border-radius:3px">${arrow}${display}%</span>`;
+  }
+
+  // 金额色阶: 越大背景越深(蓝)
+  if (isMoney) {
+    const intensity = Math.min(n / 500000, 1);
+    const bg = `rgba(22,119,255,${intensity * 0.15})`;
+    return `<span class="num" style="background:${bg};padding:1px 4px;border-radius:3px">${display}</span>`;
+  }
+
+  // 计数值色阶
+  if (isCount) {
+    const intensity = Math.min(n / 50000, 1);
+    const bg = `rgba(82,196,26,${intensity * 0.12})`;
+    return `<span class="num" style="background:${bg};padding:1px 4px;border-radius:3px">${display}</span>`;
+  }
+
+  return `<span class="num">${display}</span>`;
+}
+
+// ====== API ======
+async function api(url) {
+  const p = new URLSearchParams();
+  ['业务组','三级分类','BU','月','周'].forEach(f => {
+    const s = document.getElementById('f_'+f); if (!s) return;
+    ($(s).val()||[]).forEach(v => p.append(f, v));
+  });
+  const sku = document.getElementById('f_最早SKU');
+  if (sku && sku.value.trim()) sku.value.split(',').map(s=>s.trim()).filter(Boolean).forEach(s => p.append('最早SKU', s));
+  const li = document.getElementById('f_Listing标识');
+  if (li && li.value.trim()) li.value.split(',').map(s=>s.trim()).filter(Boolean).forEach(s => p.append('Listing标识', s));
+  const qs = p.toString();
+  const r = await fetch(url + (qs?'?'+qs:''));
+  if (!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+
+async function init() {
+  CF = await api('/api/filters');
+  ['业务组','三级分类','BU','月','周'].forEach(f => {
+    const s = document.getElementById('f_'+f); if (!s||!CF[f]) return;
+    CF[f].forEach(v => s.add(new Option(v,v)));
+    $(s).select2({placeholder:'选'+f+'...', allowClear:true, width:'100%'});
+  });
+  document.getElementById('headerTime').textContent = '刷新: '+new Date().toLocaleString('zh-CN');
+  await refresh();
+}
+
+function toggleAll(id) {
+  const s = document.getElementById(id); if (!s) return;
+  const o = Array.from(s.options);
+  const all = o.every(x=>x.selected);
+  o.forEach(x=>x.selected=!all);
+  $(s).trigger('change');
+}
+
+function showFS() {
+  const p = [];
+  ['业务组','三级分类','BU','月','周'].forEach(f => {
+    const s = document.getElementById('f_'+f); if (!s) return;
+    const v = $(s).val()||[]; if (v.length) p.push(f+':'+v.length);
+  });
+  document.getElementById('filterStatus').textContent = p.length ? '已选: '+p.join(' | ') : '全部数据';
+}
+
+function getParams() {
+  const p = new URLSearchParams();
+  ['业务组','三级分类','BU','月','周'].forEach(f => {
+    const s = document.getElementById('f_'+f); if (!s) return;
+    ($(s).val()||[]).forEach(v => p.append(f, v));
+  });
+  const sku = document.getElementById('f_最早SKU');
+  if (sku && sku.value.trim()) sku.value.split(',').map(s=>s.trim()).filter(Boolean).forEach(s => p.append('最早SKU', s));
+  const li = document.getElementById('f_Listing标识');
+  if (li && li.value.trim()) li.value.split(',').map(s=>s.trim()).filter(Boolean).forEach(s => p.append('Listing标识', s));
+  return p;
+}
+
+async function exportXlsx() {
+  const btn = event.target; const orig = btn.textContent;
+  btn.textContent = '⏳ 导出中...'; btn.disabled = true;
+  try {
+    const p = getParams();
+    const r = await fetch('/api/export?' + p.toString());
+    if (!r.ok) throw new Error('导出失败');
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '美线促销监控_' + new Date().toISOString().slice(0,10) + '.xlsx';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    btn.textContent = '✅ 导出成功!';
+    setTimeout(() => { btn.textContent = '📥 导出 xlsx'; btn.disabled = false; }, 2000);
+  } catch(e) {
+    btn.textContent = '❌ 导出失败';
+    setTimeout(() => { btn.textContent = '📥 导出 xlsx'; btn.disabled = false; }, 2000);
+  }
+}
+
+async function applyFilters() { showFS(); document.getElementById('tabContent').innerHTML='<div class="loading"><div class="sp"></div><div>加载中...</div></div>'; await refresh(); }
+function resetFilters() {
+  ['业务组','三级分类','BU','月','周'].forEach(f => { const s=document.getElementById('f_'+f); if(s) $(s).val(null).trigger('change'); });
+  document.getElementById('f_最早SKU').value=''; document.getElementById('f_Listing标识').value='';
+  showFS(); refresh();
+}
+async function refresh() { await Promise.all([upStats(), upCh1(), upCh2(), upCh3(), upCh4(), upTab()]); }
+
+// ====== Stats ======
+async function upStats() {
+  try {
+    const d = await api('/api/data_summary');
+    document.getElementById('statsRow').innerHTML = `
+      <div class="stat-card" style="border-left-color:var(--primary)"><div class="v">${(d.total_spend/10000).toFixed(1)}万</div><div class="l">💵 营销花费</div></div>
+      <div class="stat-card" style="border-left-color:var(--success)"><div class="v">${(d.total_sales/10000).toFixed(1)}万</div><div class="l">💰 总销额</div></div>
+      <div class="stat-card" style="border-left-color:#722ed1"><div class="v">${d.distinct_sku.toLocaleString()}</div><div class="l">📦 SKU数</div></div>
+      <div class="stat-card" style="border-left-color:#13c2c2"><div class="v">${d.distinct_listing.toLocaleString()}</div><div class="l">🏷️ Listing</div></div>
+      <div class="stat-card" style="border-left-color:var(--warning)"><div class="v">${(d.total_orders/1000).toFixed(1)}K</div><div class="l">📋 总销量</div></div>
+      <div class="stat-card" style="border-left-color:var(--danger)"><div class="v">${d.date_range[0]?.slice(5)||'-'}</div><div class="l">📅 最新日期</div></div>
+    `;
+    document.getElementById('headerInfo').textContent = `${d.date_range[0]||'-'} ~ ${d.date_range[1]||'-'} | ${d.distinct_sku} SKU · ${d.distinct_listing} Listing`;
+  } catch(e) { document.getElementById('statsRow').innerHTML=`<div style="grid-column:1/-1;color:var(--danger);padding:8px;text-align:center;">⚠️ ${e.message}</div>`; }
+}
+
+// ====== Charts (全部去网格线) ======
+const NO_GRID = { x: { grid: { display: false }, ticks: { font: { size: 9 } } }, y: { grid: { display: false }, ticks: { font: { size: 9 } } } };
+
+function mkChart(id, cfg) {
+  if(CI[id]){CI[id].destroy();delete CI[id]}
+  const ctx=document.getElementById(id);
+  if(ctx) {
+    // 强制所有scale去掉网格
+    if (cfg.options && cfg.options.scales) {
+      Object.keys(cfg.options.scales).forEach(k => {
+        if (!cfg.options.scales[k].grid) cfg.options.scales[k].grid = {};
+        cfg.options.scales[k].grid.display = false;
+      });
+    }
+    CI[id]=new Chart(ctx, cfg);
+  }
+}
+
+async function upCh1() {
+  try {
+    const d = await api('/api/chart1');
+    mkChart('ch1', {
+      type:'bar', data: { labels:d.labels, datasets: [
+        { label:'📦 已订购商品数量', data:d['已订购商品数量'], backgroundColor:'rgba(22,119,255,0.6)', borderColor:'#1677ff', borderWidth:1, order:2, yAxisID:'y' },
+        { label:'💵 SPEND$', data:d['SPEND$'], type:'line', borderColor:'#ff4d4f', backgroundColor:'rgba(255,77,79,0.06)', borderWidth:2, fill:true, tension:.3, pointRadius:3, order:1, yAxisID:'y1' }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top',labels:{boxWidth:10,padding:8,font:{size:10}}}, title:{display:true,text:'周销量 & SPEND$趋势',font:{size:12}} }, scales:{ y:{position:'left',title:{display:true,text:'商品数量'},beginAtZero:true,grid:{display:false}}, y1:{position:'right',title:{display:true,text:'SPEND$'},beginAtZero:true,grid:{display:false}} }, interaction:{intersect:false,mode:'index'} }
+    });
+  } catch(e){}
+}
+
+async function upCh2() {
+  try {
+    const d = await api('/api/chart2');
+    mkChart('ch2', {
+      type:'bar', data:{ labels:d.labels, datasets:[
+        { label:'📊 促销%', data:d['促销%'], backgroundColor:'rgba(82,196,26,0.6)', borderColor:'#52c41a', borderWidth:1, order:2, yAxisID:'y' },
+        { label:'📈 营销%', data:d['营销%'], type:'line', borderColor:'#faad14', backgroundColor:'rgba(250,173,20,0.06)', borderWidth:2, fill:true, tension:.3, pointRadius:3, order:1, yAxisID:'y1' }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top',labels:{boxWidth:10,padding:8,font:{size:10}}}, title:{display:true,text:'周促销% & 营销%趋势',font:{size:12}} }, scales:{ y:{position:'left',title:{display:true,text:'%'},beginAtZero:true,grid:{display:false}}, y1:{position:'right',title:{display:true,text:'%'},beginAtZero:true,grid:{display:false}} }, interaction:{intersect:false,mode:'index'} }
+    });
+  } catch(e){}
+}
+
+async function upCh3() {
+  try {
+    const d = await api('/api/chart3_bijia');
+    const cl=['#1677ff','#ff4d4f','#52c41a','#faad14','#722ed1'];
+    mkChart('ch3', {
+      type:'line', data:{ labels:d.labels, datasets:Object.keys(d).filter(k=>k!='labels').map((k,i)=>({label:k,data:d[k],borderColor:cl[i%cl.length],backgroundColor:cl[i%cl.length]+'22',borderWidth:2,fill:false,tension:.3,pointRadius:3})) },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top',labels:{boxWidth:10,font:{size:10}}}, title:{display:true,text:'📊 比价类型 · SKU去重趋势',font:{size:12}} }, scales:{ x:{grid:{display:false}}, y:{beginAtZero:true,grid:{display:false}} }, interaction:{intersect:false,mode:'index'} }
+    });
+  } catch(e){}
+}
+
+async function upCh4() {
+  try {
+    const d = await api('/api/chart4_activity');
+    const cl=['#d9d9d9','#1677ff','#ff4d4f','#52c41a','#faad14','#722ed1','#13c2c2'];
+    mkChart('ch4', {
+      type:'line', data:{ labels:d.labels, datasets:Object.keys(d).filter(k=>k!='labels').map((k,i)=>({label:k,data:d[k],borderColor:cl[i%cl.length],backgroundColor:cl[i%cl.length]+'22',borderWidth:2,fill:false,tension:.3,pointRadius:3})) },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top',labels:{boxWidth:10,font:{size:10}}}, title:{display:true,text:'🏷️ 活动标识 · SKU去重趋势',font:{size:12}} }, scales:{ x:{grid:{display:false}}, y:{beginAtZero:true,grid:{display:false}} }, interaction:{intersect:false,mode:'index'} }
+    });
+  } catch(e){}
+}
+
+// ====== Tabs ======
+function sw(n, b) {
+  CT = n;
+  document.querySelectorAll('#tabBar .tab').forEach(t=>t.classList.remove('act'));
+  if(b) b.classList.add('act');
+  upTab();
+}
+
+async function upTab() {
+  const el = document.getElementById('tabContent');
+  el.innerHTML = '<div class="loading"><div class="sp"></div><div>加载中...</div></div>';
+  try {
+    switch(CT) {
+      case 'big': await rBig(); break;
+      case 'disc': await rDisc(); break;
+      case 'promo': await rPromo(); break;
+      case 'up': await rUp(); break;
+      case 'tcat': await rTCat(); break;
+      case 'tsku': await rTSku(); break;
+      case 'tdisc': await rTDisc(); break;
+      case 'dsku': await rDSku(); break;
+      case 'dlist': await rDList(); break;
+    }
+  } catch(e) { el.innerHTML=`<div style="padding:20px;text-align:center;color:var(--danger);">❌ ${e.message}</div>`; }
+}
+
+// ====== 带条件格式的表格渲染 ======
+function rt(headers, data, pctFields, huobiFields) {
+  const el = document.getElementById('tabContent');
+  const LIM = 200;
+  huobiFields = huobiFields || ['SPEND$环比%','已订购商品数量环比%','Total ads Units环比%'];
+
+  let h = `<table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>`;
+  data.slice(0, LIM).forEach(r => {
+    h += '<tr>';
+    headers.forEach(c => {
+      let v = r[c];
+      if (v === null || v === undefined || v === '') { h += '<td class="num">-</td>'; return; }
+      // 日期/文本列不参与数值格式化
+      const textCols = ['按天','月','周','Listing标识','最早SKU','折扣打标','业务组','三级分类','比价类型','是否活动','活动标识','比例对比','BU','上架年月'];
+      if (textCols.includes(c) || typeof v === 'string') { h += `<td>${v}</td>`; return; }
+      const n = typeof v === 'number' ? v : parseFloat(v);
+      if (isNaN(n)) { h += `<td>${v}</td>`; return; }
+
+      const isPct = pctFields.includes(c);
+      const isHuobi = huobiFields.includes(c);
+
+      if (isHuobi && isPct) {
+        // 环比色阶
+        let cls = n > 0 ? 'pct-up' : n < 0 ? 'pct-down' : 'pct-flat';
+        let arrow = n > 0 ? '▲' : n < 0 ? '▼' : '○';
+        h += `<td class="num ${cls}">${arrow} ${n.toFixed(1)}%</td>`;
+      } else if (isPct) {
+        // 百分比色阶
+        let bg = 'rgba(82,196,26,0.08)';
+        let tc = '#52c41a';
+        if (c.includes('ACOS') || c.includes('营销%')) {
+          if (n > 30) { bg = 'rgba(245,34,45,0.12)'; tc = '#f5222d'; }
+          else if (n > 15) { bg = 'rgba(250,140,22,0.1)'; tc = '#fa8c16'; }
+          else { bg = 'rgba(82,196,26,0.08)'; tc = '#52c41a'; }
+        } else if (c.includes('ROAS')) {
+          if (n > 3) { bg = 'rgba(82,196,26,0.12)'; tc = '#52c41a'; }
+          else if (n > 1) { bg = 'rgba(250,140,22,0.1)'; tc = '#fa8c16'; }
+          else { bg = 'rgba(245,34,45,0.12)'; tc = '#f5222d'; }
+        }
+        h += `<td class="num" style="background:${bg};color:${tc};font-weight:600;border-radius:3px">${n.toFixed(1)}%</td>`;
+      } else {
+        // 数值色阶 - 迷你进度条
+        let display = '';
+        if (Math.abs(n) >= 100000) display = (n/10000).toFixed(0)+'万';
+        else if (Math.abs(n) >= 10000) display = (n/10000).toFixed(1)+'万';
+        else if (Number.isInteger(n)) display = n.toLocaleString();
+        else display = n.toFixed(2);
+
+        // 按列类型生成背景
+        let bg = '';
+        if (c.includes('$') || c.includes('费') || c.includes('销额') || c.includes('SPEND')) {
+          const intensity = Math.min(Math.abs(n) / 200000, 1);
+          bg = `rgba(22,119,255,${intensity * 0.18})`;
+        } else if (c.includes('计数') || c.includes('数量') || c.includes('Orders') || c.includes('Units') || c.includes('IMPRESSIONS') || c.includes('CLICKS') || c.includes('浏览次数')) {
+          const intensity = Math.min(Math.abs(n) / 20000, 1);
+          bg = `rgba(82,196,26,${intensity * 0.14})`;
+        } else if (c.includes('CPC') || c.includes('CPO')) {
+          const intensity = Math.min(Math.abs(n) / 5, 1);
+          bg = `rgba(114,46,209,${intensity * 0.12})`;
+        }
+
+        h += `<td class="num" style="${bg ? 'background:'+bg+';border-radius:3px' : ''}">${display}</td>`;
+      }
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  if (data.length > LIM) h += `<div style="padding:4px;font-size:10px;color:var(--text2);">📌 前${LIM}条 · 共${data.length}条</div>`;
+  el.innerHTML = h;
+}
+
+function rEmpty() { document.getElementById('tabContent').innerHTML='<div style="padding:25px;text-align:center;color:var(--text2);">📭 暂无数据</div>'; }
+
+// ====== Tables ======
+async function rBig() {
+  const d = await api('/api/table1_big');
+  if(!d.length) return rEmpty();
+  rt(['月','业务组','三级分类','最早SKU去重计数','Listing标识去重计数','SPEND$','Total ads Sales$','Total ads Units','IMPRESSIONS','CLICKS','页面浏览次数','已订购商品数量','已订购商品销售额','促销%','营销%','折扣%','funding%','CTR%','T-CVR%','T-CR%','$CPC','ACOS%','ROAS','$CPO','SPEND$环比%','已订购商品数量环比%','Total ads Units环比%'],
+    d, ['促销%','营销%','折扣%','funding%','CTR%','T-CVR%','T-CR%','ACOS%','SPEND$环比%','已订购商品数量环比%','Total ads Units环比%']);
+}
+
+async function rDisc() {
+  const d = await api('/api/table2_discount');
+  if(!d.length) return rEmpty();
+  rt(['折扣打标','最早SKU去重计数','Listing标识去重计数','SPEND$','Total ads Sales$','Total ads Units','IMPRESSIONS','CLICKS','页面浏览次数','已订购商品数量','已订购商品销售额','促销%','营销%','折扣%','funding%','CTR%','T-CVR%','T-CR%','$CPC','ACOS%','ROAS','$CPO'],
+    d, ['促销%','营销%','折扣%','funding%','CTR%','T-CVR%','T-CR%','ACOS%']);
+}
+
+async function rPromo() {
+  const d = await api('/api/table3_promotion');
+  if(!d.length) return rEmpty();
+  rt(['月','业务组','三级分类','最早SKU去重计数','Listing标识去重计数','活动计数','比低价计数','比高价计数','BD标识计数','VM BD标识计数','比例一致计数','funding更高计数','funding更低计数'], d, []);
+}
+
+async function rUp() {
+  const d = await api('/api/table4_listing');
+  if(!d.length) return rEmpty();
+  rt(['月','业务组','三级分类','最早SKU去重计数','Listing标识去重计数','活动计数','比低价计数','比高价计数','BD标识计数','VM BD标识计数','比例一致计数','funding更高计数','funding更低计数'], d, []);
+}
+
+// ====== Trend Charts ======
+async function rTCat() {
+  const d = await api('/api/trend1_category');
+  if(!d.labels||!d.labels.length) return rEmpty();
+  const cl=['#1677ff','#ff4d4f','#52c41a','#faad14','#722ed1','#13c2c2','#eb2f96','#fa8c16','#2f54eb','#a0d911'];
+  document.getElementById('tabContent').innerHTML = `<div style="margin:4px 0 6px;font-size:11px;color:var(--text2);">💡 选三级分类查看具体趋势</div><div class="chart-box-tall"><canvas id="tcC"></canvas></div>`;
+  mkChart('tcC', {
+    type:'line', data:{ labels:d.labels, datasets:Object.keys(d).filter(k=>k!='labels').map((k,i)=>({label:k,data:d[k],borderColor:cl[i%cl.length],borderWidth:2,fill:false,tension:.3,pointRadius:2})) },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top',labels:{boxWidth:10,font:{size:10}}}, title:{display:true,text:'三级分类 · funding% 周趋势',font:{size:12}} }, scales:{ x:{grid:{display:false}}, y:{beginAtZero:true,title:{display:true,text:'funding%'},grid:{display:false}} }, interaction:{intersect:false,mode:'index'} }
+  });
+}
+
+async function rTSku() {
+  const d = await api('/api/trend2_sku');
+  if(!d.labels||!d.labels.length) return rEmpty();
+  const cl=['#1677ff','#ff4d4f','#52c41a','#faad14','#722ed1','#13c2c2','#eb2f96','#fa8c16','#2f54eb','#a0d911'];
+  document.getElementById('tabContent').innerHTML = `<div style="margin:4px 0 6px;font-size:11px;color:var(--text2);">💡 筛选SKU查看具体趋势</div><div class="chart-box-tall"><canvas id="tsC"></canvas></div>`;
+  mkChart('tsC', {
+    type:'line', data:{ labels:d.labels, datasets:Object.keys(d).filter(k=>k!='labels').map((k,i)=>({label:k,data:d[k],borderColor:cl[i%cl.length],borderWidth:2,fill:false,tension:.3,pointRadius:2})) },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top',labels:{boxWidth:10,font:{size:10}}}, title:{display:true,text:'SKU · funding% 周趋势',font:{size:12}} }, scales:{ x:{grid:{display:false}}, y:{beginAtZero:true,title:{display:true,text:'funding%'},grid:{display:false}} }, interaction:{intersect:false,mode:'index'} }
+  });
+}
+
+async function rTDisc() {
+  const d = await api('/api/trend3_discount');
+  if(!d.labels||!d.labels.length) return rEmpty();
+  const cl=['#d9d9d9','#52c41a','#1677ff','#faad14','#ff4d4f','#722ed1','#eb2f96','#13c2c2'];
+  document.getElementById('tabContent').innerHTML = `<div class="chart-box-tall"><canvas id="tdC"></canvas></div>`;
+  mkChart('tdC', {
+    type:'line', data:{ labels:d.labels, datasets:Object.keys(d).filter(k=>k!='labels').map((k,i)=>({label:k,data:d[k],borderColor:cl[i%cl.length],backgroundColor:cl[i%cl.length]+'22',borderWidth:2,fill:false,tension:.3,pointRadius:3})) },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top',labels:{boxWidth:10,font:{size:10}}}, title:{display:true,text:'折扣打标 · SKU去重计数周趋势',font:{size:12}} }, scales:{ x:{grid:{display:false}}, y:{beginAtZero:true,grid:{display:false}} }, interaction:{intersect:false,mode:'index'} }
+  });
+}
+
+async function rDSku() {
+  const d = await api('/api/detail_sku');
+  if(!d.length) return rEmpty();
+  rt(['按天','Listing标识','最早SKU','是否活动','比价类型','活动标识','SPEND$','Total ads Sales$','Total ads Units','IMPRESSIONS','CLICKS','页面浏览次数','已订购商品数量','已订购商品销售额','促销%','营销%','折扣%','funding%','CTR%','T-CVR%','T-CR%','$CPC','ACOS%','ROAS','$CPO','广告直购销额%'],
+    d, ['促销%','营销%','折扣%','funding%','CTR%','T-CVR%','T-CR%','ACOS%','广告直购销额%']);
+}
+
+async function rDList() {
+  const d = await api('/api/detail_listing');
+  if(!d.length) return rEmpty();
+  rt(['按天','最早SKU去重计数','SPEND$','Total ads Sales$','Total ads Units','IMPRESSIONS','CLICKS','页面浏览次数','已订购商品数量','已订购商品销售额','促销%','营销%','CTR%','T-CVR%','T-CR%','$CPC','ACOS%','ROAS','$CPO','广告直购销额%'],
+    d, ['促销%','营销%','CTR%','T-CVR%','T-CR%','ACOS%','广告直购销额%']);
+}
+
+$(init);
+
+// 动态计算置顶高度
+function adjustContainerPad() {
+  const sticky = document.querySelector('.sticky-top');
+  const container = document.querySelector('.container');
+  if (sticky && container) {
+    container.style.paddingTop = (sticky.offsetHeight + 8) + 'px';
+  }
+}
+$(window).on('load', adjustContainerPad);
+$(window).on('resize', adjustContainerPad);
+// Select2 展开/收起时重新计算
+$(document).on('select2:open select2:close', function() { setTimeout(adjustContainerPad, 100); });
+</script>
+</body>
+</html>
