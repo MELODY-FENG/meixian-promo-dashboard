@@ -2,7 +2,7 @@
 """
 美线促销监控 - Flask 后端 (Parquet版)
 """
-import os, json, gc, io
+import os, json, gc, io, urllib.request, gzip
 import pandas as pd
 import numpy as np
 from flask import Flask, jsonify, request, render_template, send_file
@@ -10,18 +10,36 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# 模块导入时自动加载数据（PA WSGI 需要）
+# 自动适配路径（Windows 本地 / Linux 通用）
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PARQUET_PATH = os.path.join(BASE_DIR, 'data.parquet')
+CSV_GZ_PATH = os.path.join(BASE_DIR, 'data.csv.gz')
+JSON_PATH = os.path.join(BASE_DIR, 'filter_opts.json')
+FILTER_OPTS_PATH = JSON_PATH
+
+# GitHub 数据文件直链（每次 release 后更新此 URL）
+GITHUB_DATA_URL = "https://github.com/MELODY-FENG/meixian-promo-dashboard/raw/master/data.parquet"
+GITHUB_JSON_URL = "https://github.com/MELODY-FENG/meixian-promo-dashboard/raw/master/filter_opts.json"
+
+def _download_if_missing(path, url):
+    if os.path.exists(path) and os.path.getsize(path) > 0:
+        return  # 已有
+    print(f"[下载] 从 {url} 下载到 {path}")
+    try:
+        urllib.request.urlretrieve(url, path)
+        print(f"[下载] 完成: {os.path.getsize(path)/1024/1024:.1f}MB")
+    except Exception as e:
+        print(f"[下载] 失败: {e}")
+
+# 模块导入时自动加载数据
 _loaded = False
 def ensure_loaded():
     global _loaded
     if not _loaded:
+        _download_if_missing(PARQUET_PATH, GITHUB_DATA_URL)
+        _download_if_missing(JSON_PATH, GITHUB_JSON_URL)
         load_data()
         _loaded = True
-
-# 自动适配路径（Windows 本地 / PA Linux 通用）
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH = os.path.join(BASE_DIR, 'data.csv.gz')
-FILTER_OPTS_PATH = os.path.join(BASE_DIR, 'filter_opts.json')
 
 df = None
 FILTER_RANGES = {}
