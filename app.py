@@ -2,7 +2,7 @@
 """
 美线促销监控 - Flask 后端 (Parquet版)
 """
-import os, json, gc, io
+import os, json, gc, io, urllib.request
 import pandas as pd
 import numpy as np
 from flask import Flask, jsonify, request, render_template, send_file
@@ -10,17 +10,31 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# 自动适配路径（Windows 本地 / Linux 通用）
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PARQUET_PATH = os.path.join(BASE_DIR, 'data.parquet')
 JSON_PATH = os.path.join(BASE_DIR, 'filter_opts.json')
 FILTER_OPTS_PATH = JSON_PATH
 
-# 模块导入时自动加载数据
+# GitHub raw URL（仓库已公开，无需 token）
+DATA_URL = "https://raw.githubusercontent.com/MELODY-FENG/meixian-promo-dashboard/master/data.parquet"
+FILTER_URL = "https://raw.githubusercontent.com/MELODY-FENG/meixian-promo-dashboard/master/filter_opts.json"
+
+def _download_if_missing(path, url):
+    if os.path.exists(path) and os.path.getsize(path) > 0:
+        return
+    print(f"[下载] {url} -> {path}")
+    try:
+        urllib.request.urlretrieve(url, path)
+        print(f"[下载] 完成: {os.path.getsize(path)/1024/1024:.1f}MB")
+    except Exception as e:
+        print(f"[下载] 失败: {e}")
+
 _loaded = False
 def ensure_loaded():
     global _loaded
     if not _loaded:
+        _download_if_missing(PARQUET_PATH, DATA_URL)
+        _download_if_missing(JSON_PATH, FILTER_URL)
         load_data()
         _loaded = True
 
