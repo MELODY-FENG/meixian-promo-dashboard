@@ -1,4 +1,2 @@
 #!/bin/bash
-# Render 启动脚本
-cd /opt/render/project/src
-python -X utf8 app.py
+gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120 --workers 2

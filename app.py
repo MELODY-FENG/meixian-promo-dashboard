@@ -10,9 +10,17 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# 自动适配路径（Windows 本地 / Render Linux 通用）
+# 模块导入时自动加载数据（PA WSGI 需要）
+_loaded = False
+def ensure_loaded():
+    global _loaded
+    if not _loaded:
+        load_data()
+        _loaded = True
+
+# 自动适配路径（Windows 本地 / PA Linux 通用）
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PARQUET_PATH = os.path.join(BASE_DIR, 'data.parquet')
+DATA_PATH = os.path.join(BASE_DIR, 'data.csv.gz')
 FILTER_OPTS_PATH = os.path.join(BASE_DIR, 'filter_opts.json')
 
 df = None
@@ -21,8 +29,15 @@ FILTER_RANGES = {}
 def load_data():
     global df, FILTER_RANGES
     t0 = datetime.now()
-    print(f"[{t0}] 加载 parquet...")
-    df = pd.read_parquet(PARQUET_PATH)
+    # 优先加载 parquet（更快），没有则加载 csv.gz
+    parquet_path = os.path.join(BASE_DIR, 'data.parquet')
+    csv_path = os.path.join(BASE_DIR, 'data.csv.gz')
+    if os.path.exists(parquet_path):
+        print(f"[{t0}] 加载 parquet...")
+        df = pd.read_parquet(parquet_path)
+    else:
+        print(f"[{t0}] 加载 csv.gz...")
+        df = pd.read_csv(csv_path, compression='gzip')
     t1 = datetime.now()
     print(f"[{t1}] 加载完成: {len(df)} 行, {len(df.columns)} 列, 耗时 {(t1-t0).seconds}s")
 
@@ -42,6 +57,7 @@ def load_data():
 def get_filtered_data(args):
     """Apply filters and return filtered dataframe"""
     global df
+    ensure_loaded()
     d = df.copy()
 
     # 业务组
@@ -94,6 +110,7 @@ def index():
 
 @app.route('/api/filters')
 def api_filters():
+    ensure_loaded()
     return jsonify(FILTER_RANGES)
 
 @app.route('/api/data_summary')
