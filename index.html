@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>美线促销天监控 | Amazon Promotion Daily Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script src="data_engine.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; background: #f5f6fa; color: #2c3e50; }
+
+/* ===== Sticky Top (Header + Filter+KPI side by side) ===== */
+.sticky-top { position: sticky; top: 0; z-index: 999; }
+.header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); color: #fff; padding: 10px 40px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+.main { max-width: 1520px; margin: 0 auto; padding: 16px 24px; }
+
+/* ===== Top Body: Left Filters + Right KPI ===== */
+.top-body { background: #fff; padding: 10px 20px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: flex; gap: 16px; align-items: flex-start; }
+.top-filters { flex: 1; min-width: 0; }
+.top-kpi { flex-shrink: 0; width: 520px; }
+
+/* ===== Filter Panel ===== */
+.filter-panel { }
+.filter-row { display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; align-items: flex-end; }
+.filter-row:last-child { margin-bottom: 0; }
+.filter-group { display: flex; flex-direction: column; gap: 3px; position: relative; }
+.filter-group label { font-size: 11px; font-weight: 600; color: #7f8c8d; text-transform: uppercase; letter-spacing: 0.5px; }
+.section-label { font-size: 11px; font-weight: 700; color: #3498db; text-transform: uppercase; letter-spacing: 1px; padding: 2px 8px; background: #ebf5fb; border-radius: 4px; margin-bottom: 2px; }
+.btn-row { display: flex; gap: 8px; align-items: flex-end; }
+.btn { padding: 7px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.btn-primary { background: #3498db; color: #fff; }
+.btn-primary:hover { background: #2980b9; }
+.btn-outline { background: #fff; color: #7f8c8d; border: 1px solid #dcdde1; }
+.btn-outline:hover { background: #f5f6fa; }
+
+/* ===== Custom Dropdown Filter ===== */
+.dropdown-btn { border: 1px solid #dcdde1; border-radius: 6px; padding: 7px 28px 7px 10px; font-size: 13px; background: #fff; color: #2c3e50; min-width: 180px; cursor: pointer; position: relative; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: border-color 0.2s; line-height: 1.4; }
+.dropdown-btn:hover { border-color: #3498db; }
+.dropdown-btn.active { border-color: #3498db; box-shadow: 0 0 0 2px rgba(52,152,219,0.15); }
+.dropdown-btn::after { content: '\25BE'; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; color: #7f8c8d; }
+.dropdown-count { display: inline-block; background: #3498db; color: #fff; font-size: 10px; border-radius: 8px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; }
+.dropdown-panel { display: none; position: absolute; top: 100%; left: 0; margin-top: 2px; background: #fff; border: 1px solid #dcdde1; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.15); z-index: 2000; max-height: 340px; width: 280px; overflow: hidden; flex-direction: column; }
+.dropdown-panel.show { display: flex; }
+.dropdown-search { padding: 8px; border-bottom: 1px solid #ecf0f1; }
+.dropdown-search input { width: 100%; border: 1px solid #dcdde1; border-radius: 4px; padding: 5px 8px; font-size: 12px; }
+.dropdown-actions { display: flex; gap: 4px; padding: 4px 8px; border-bottom: 1px solid #ecf0f1; }
+.dropdown-actions button { font-size: 11px; padding: 2px 8px; border: 1px solid #dcdde1; border-radius: 3px; background: #fff; cursor: pointer; color: #7f8c8d; }
+.dropdown-actions button:hover { background: #f0f0f0; color: #2c3e50; }
+.dropdown-list { overflow-y: auto; flex: 1; padding: 4px 0; }
+.dropdown-item { display: flex; align-items: center; gap: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; overflow: hidden; }
+.dropdown-item:hover { background: #ebf5fb; }
+.dropdown-item input[type="checkbox"] { cursor: pointer; flex-shrink: 0; }
+.dropdown-item span { overflow: hidden; text-overflow: ellipsis; }
+
+/* ===== KPI Cards (in top-right) ===== */
+.kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kpi-card { background: #f8f9fb; border-radius: 6px; padding: 8px 10px; border: 1px solid #ecf0f1; }
+.kpi-card .label { font-size: 10px; color: #95a5a6; font-weight: 500; margin-bottom: 1px; }
+.kpi-card .value { font-size: 16px; font-weight: 700; color: #2c3e50; }
+.kpi-card .unit { font-size: 10px; color: #7f8c8d; }
+.kpi-card.accent-red .value { color: #e74c3c; }
+.kpi-card.accent-blue .value { color: #3498db; }
+.kpi-card.accent-green .value { color: #27ae60; }
+
+/* Charts Grid */
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.chart-panel { background: #fff; border-radius: 10px; padding: 16px 20px; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
+.chart-panel.full-width { grid-column: 1 / -1; }
+.chart-panel h3 { font-size: 15px; font-weight: 700; color: #2c3e50; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #f0f0f0; }
+.chart-canvas-wrap { position: relative; width: 100%; height: 380px; }
+.chart-canvas-wrap canvas { width: 100% !important; height: 100% !important; }
+.chart-panel.pivot-panel .chart-canvas-wrap { height: 400px; }
+
+/* Loading */
+.loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.7); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; }
+.loading-overlay.active { display: flex; }
+.spinner { width: 40px; height: 40px; border: 3px solid #dcdde1; border-top-color: #3498db; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 10px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 14px; color: #7f8c8d; }
+
+/* Section Divider */
+.section-divider { grid-column: 1 / -1; margin: 8px 0 4px; padding: 8px 16px; background: linear-gradient(90deg, #0f3460, #16213e); color: #fff; border-radius: 6px; font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+
+/* ===== Conditional Formatting ===== */
+.cond-lo { color: #27ae60 !important; font-weight: 600; }
+.cond-mid { color: #f39c12 !important; font-weight: 600; }
+.cond-hi { color: #e74c3c !important; font-weight: 700; }
+
+/* ===== Tables with Frozen Columns ===== */
+.table-panel { background: #fff; border-radius: 10px; padding: 16px 20px; margin-bottom: 16px; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
+.table-panel h3 { font-size: 15px; font-weight: 700; color: #2c3e50; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #f0f0f0; }
+.table-wrap { overflow: auto; max-height: 500px; border: 1px solid #ecf0f1; border-radius: 6px; position: relative; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.data-table thead { position: sticky; top: 0; z-index: 20; }
+.data-table th { padding: 8px 10px; text-align: right; color: #fff; font-weight: 600; white-space: nowrap; background: #2c3e50; cursor: pointer; user-select: none; }
+.data-table th:first-child, .data-table td:first-child { text-align: left; }
+.data-table th .sort-icon { display: inline-block; font-size: 10px; color: #7f8c8d; margin-left: 2px; }
+.data-table th.sorted-asc .sort-icon::after { content: ' \25B2'; color: #f1c40f; }
+.data-table th.sorted-desc .sort-icon::after { content: ' \25BC'; color: #f1c40f; }
+.data-table td { padding: 6px 10px; text-align: right; border-bottom: 1px solid #ecf0f1; white-space: nowrap; }
+.data-table tbody tr:hover { background: #ebf5fb; }
+.data-table tbody tr:nth-child(even) { background: #fafbfc; }
+.data-table tbody tr:nth-child(even):hover { background: #ebf5fb; }
+.pos-val { color: #e74c3c; font-weight: 600; }
+.neg-val { color: #27ae60; font-weight: 600; }
+
+/* Frozen first 3 columns */
+.data-table th:nth-child(1), .data-table td:nth-child(1) { position: sticky; left: 0; z-index: 5; min-width: 90px; }
+.data-table th:nth-child(2), .data-table td:nth-child(2) { position: sticky; left: 90px; z-index: 5; min-width: 100px; }
+.data-table th:nth-child(3), .data-table td:nth-child(3) { position: sticky; left: 190px; z-index: 5; min-width: 120px; }
+.data-table thead th:nth-child(1), .data-table thead th:nth-child(2), .data-table thead th:nth-child(3) { z-index: 30; background: #1a252f; }
+.data-table td:nth-child(1), .data-table td:nth-child(2), .data-table td:nth-child(3) { background: #fff; }
+.data-table tbody tr:nth-child(even) td:nth-child(1),
+.data-table tbody tr:nth-child(even) td:nth-child(2),
+.data-table tbody tr:nth-child(even) td:nth-child(3) { background: #fafbfc; }
+.data-table tbody tr:hover td:nth-child(1),
+.data-table tbody tr:hover td:nth-child(2),
+.data-table tbody tr:hover td:nth-child(3) { background: #ebf5fb; }
+.data-table td:nth-child(3) { box-shadow: 2px 0 4px rgba(0,0,0,0.08); }
+.data-table th:nth-child(3) { border-right: 2px solid #0d1419; }
+
+.table-info { font-size: 12px; color: #95a5a6; margin-bottom: 8px; display: block; }
+
+/* ===== Trend chart panels ===== */
+.trend-panel { background: #fff; border-radius: 10px; padding: 16px 20px; box-shadow: 0 1px 6px rgba(0,0,0,0.06); margin-bottom: 16px; }
+.trend-panel h3 { font-size: 15px; font-weight: 700; color: #2c3e50; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 2px solid #f0f0f0; }
+.trend-controls { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-end; flex-wrap: wrap; }
+.trend-controls .filter-group { min-width: 0; }
+.trend-controls .dropdown-btn { min-width: 150px; font-size: 12px; }
+.trend-controls .btn { padding: 5px 12px; font-size: 12px; }
+
+@media (max-width: 1200px) { .charts-grid { grid-template-columns: 1fr; } .top-kpi { width: 100%; } .top-body { flex-direction: column; } }
+</style>
+</head>
+<body>
+
+<div class="sticky-top">
+<div class="header">
+  <div>
+    <h1>美线促销天监控</h1>
+    <div style="font-size:12px;opacity:0.7;margin-top:4px;">Amazon American Line Promotion Daily Monitor</div>
+  </div>
+  <div class="meta" style="font-size:13px;opacity:0.8;">数据范围：2026/01 - 2026/06 | 最新：2026-06-01</div>
+</div>
+<div class="top-body">
+  <div class="top-filters" id="filterPanel"></div>
+  <div class="top-kpi"><div class="kpi-row" id="kpiRow"></div></div>
+</div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text">数据加载中...</div>
+</div>
+
+<div class="main">
+  <div class="charts-grid">
+    <div class="chart-panel" id="panel1"><h3>大组合图 1：已订购商品数量 & SPEND$ 周趋势</h3><div class="chart-canvas-wrap"><canvas id="chart1"></canvas></div></div>
+    <div class="chart-panel" id="panel2"><h3>大组合图 2：促销% & 营销% 周趋势</h3><div class="chart-canvas-wrap"><canvas id="chart2"></canvas></div></div>
+    <div class="chart-panel pivot-panel" id="panel3"><h3>比价曲线 3：比价类型 × 周 (最早SKU去重计数)</h3><div class="chart-canvas-wrap"><canvas id="chart3"></canvas></div></div>
+    <div class="chart-panel pivot-panel" id="panel4"><h3>活动曲线 4：活动标识 × 周 (最早SKU去重计数)</h3><div class="chart-canvas-wrap"><canvas id="chart4"></canvas></div></div>
+  </div>
+
+  <div class="charts-grid" style="margin-top:16px;">
+    <div class="section-divider">大板块3：汇总表格 & 趋势分析</div>
+  </div>
+
+  <div class="table-panel" id="summaryPanel">
+    <h3>(1) 大数汇总表格 — 按月 × 业务组 × 三级分类</h3>
+    <span class="table-info" id="summaryInfo"></span>
+    <div class="table-wrap"><table class="data-table" id="summaryTable"><thead></thead><tbody></tbody></table></div>
+  </div>
+
+  <div class="table-panel" id="discountSummaryPanel">
+    <h3>(2) 折扣区间汇总表格 — 按月 × 折扣打标</h3>
+    <span class="table-info" id="discInfo"></span>
+    <div class="table-wrap"><table class="data-table" id="discTable"><thead></thead><tbody></tbody></table></div>
+  </div>
+
+  <div class="table-panel" id="promoPanel">
+    <h3>(3) 促销汇总表格 — 按月 × 业务组 × 三级分类（含活动/比价/比例计数）</h3>
+    <span class="table-info" id="promoInfo"></span>
+    <div class="table-wrap"><table class="data-table" id="promoTable"><thead></thead><tbody></tbody></table></div>
+  </div>
+
+  <div class="table-panel" id="listingPanel">
+    <h3>(4) 上架汇总表格 — 按月 × 业务组 × 三级分类 × 上架年月</h3>
+    <span class="table-info" id="listingInfo"></span>
+    <div class="table-wrap"><table class="data-table" id="listingTable"><thead></thead><tbody></tbody></table></div>
+  </div>
+
+  <div class="trend-panel" id="catTrendPanel">
+    <h3>(5) 三级分类上架趋势 — funding% 周趋势</h3>
+    <div class="trend-controls">
+      <div class="filter-group"><label>选择三级分类</label><button class="dropdown-btn" id="filter_catTrendSel_btn" data-key="catTrendSel" onclick="toggleDropdown('filter_catTrendSel')">全部</button><div class="dropdown-panel" id="filter_catTrendSel_panel"><div class="dropdown-search"><input type="text" placeholder="搜索..." oninput="filterDropdownOptions('filter_catTrendSel', this.value)"></div><div class="dropdown-actions"><button onclick="selectAllDropdown('filter_catTrendSel', true)">全选</button><button onclick="selectAllDropdown('filter_catTrendSel', false)">清除</button></div><div class="dropdown-list" id="filter_catTrendSel_list"></div></div></div>
+      <div class="filter-group"><label>选择周</label><button class="dropdown-btn" id="filter_catTrendWk_btn" data-key="catTrendWk" onclick="toggleDropdown('filter_catTrendWk')">全部</button><div class="dropdown-panel" id="filter_catTrendWk_panel"><div class="dropdown-search"><input type="text" placeholder="搜索..." oninput="filterDropdownOptions('filter_catTrendWk', this.value)"></div><div class="dropdown-actions"><button onclick="selectAllDropdown('filter_catTrendWk', true)">全选</button><button onclick="selectAllDropdown('filter_catTrendWk', false)">清除</button></div><div class="dropdown-list" id="filter_catTrendWk_list"></div></div></div>
+      <button class="btn btn-primary" onclick="renderCatFundingTrend()">刷新图表</button>
+    </div>
+    <div class="chart-canvas-wrap" style="height:420px;"><canvas id="catTrendChart"></canvas></div>
+  </div>
+
+  <div class="trend-panel" id="skuTrendPanel">
+    <h3>(6) SKU上架趋势 — funding% 周趋势</h3>
+    <div class="trend-controls">
+      <div class="filter-group"><label>选择SKU</label><button class="dropdown-btn" id="filter_skuTrendSel_btn" data-key="skuTrendSel" onclick="toggleDropdown('filter_skuTrendSel')">全部</button><div class="dropdown-panel" id="filter_skuTrendSel_panel"><div class="dropdown-search"><input type="text" placeholder="搜索..." oninput="filterDropdownOptions('filter_skuTrendSel', this.value)"></div><div class="dropdown-actions"><button onclick="selectAllDropdown('filter_skuTrendSel', true)">全选</button><button onclick="selectAllDropdown('filter_skuTrendSel', false)">清除</button></div><div class="dropdown-list" id="filter_skuTrendSel_list"></div></div></div>
+      <div class="filter-group"><label>选择周</label><button class="dropdown-btn" id="filter_skuTrendWk_btn" data-key="skuTrendWk" onclick="toggleDropdown('filter_skuTrendWk')">全部</button><div class="dropdown-panel" id="filter_skuTrendWk_panel"><div class="dropdown-search"><input type="text" placeholder="搜索..." oninput="filterDropdownOptions('filter_skuTrendWk', this.value)"></div><div class="dropdown-actions"><button onclick="selectAllDropdown('filter_skuTrendWk', true)">全选</button><button onclick="selectAllDropdown('filter_skuTrendWk', false)">清除</button></div><div class="dropdown-list" id="filter_skuTrendWk_list"></div></div></div>
+      <button class="btn btn-primary" onclick="renderSkuFundingTrend()">查询</button>
+    </div>
+    <div class="chart-canvas-wrap" style="height:420px;"><canvas id="skuTrendChart"></canvas></div>
+  </div>
+
+  <div class="chart-panel full-width" id="discTrendPanel">
+    <h3>(7) 折扣区间趋势 — 周 × 折扣打标（最早SKU去重计数）</h3>
+    <div class="chart-canvas-wrap" style="height:420px;"><canvas id="discTrendChart"></canvas></div>
+  </div>
+
+  <div class="table-panel" id="skuDetailPanel">
+    <h3>(8) SKU-天数据明细表</h3>
+    <div style="margin-bottom:8px;">
+      <span style="font-size:12px;color:#7f8c8d;">时间汇总维度：</span>
+      <select id="skuDetailTimeDim" onchange="loadSkuDetail()" style="border:1px solid #dcdde1;border-radius:4px;padding:5px 8px;font-size:12px;">
+        <option value="day">按天</option><option value="week">按周</option><option value="month">按月</option>
+      </select>
+      <button class="btn btn-primary" onclick="loadSkuDetail()" style="margin-left:8px;">查询明细</button>
+      <span class="table-info" id="skuDetailInfo" style="margin-left:8px;display:inline;"></span>
+    </div>
+    <div class="table-wrap"><table class="data-table" id="skuDetailTable"><thead></thead><tbody></tbody></table></div>
+  </div>
+
+  <div class="table-panel" id="listingDetailPanel">
+    <h3>(9) Listing-天数据明细表</h3>
+    <div style="margin-bottom:8px;">
+      <span style="font-size:12px;color:#7f8c8d;">时间汇总维度：</span>
+      <select id="listingDetailTimeDim" onchange="loadListingDetail()" style="border:1px solid #dcdde1;border-radius:4px;padding:5px 8px;font-size:12px;">
+        <option value="day">按天</option><option value="week">按周</option><option value="month">按月</option>
+      </select>
+      <button class="btn btn-primary" onclick="loadListingDetail()" style="margin-left:8px;">查询明细</button>
+      <span class="table-info" id="listingDetailInfo" style="margin-left:8px;display:inline;"></span>
+    </div>
+    <div class="table-wrap"><table class="data-table" id="listingDetailTable"><thead></thead><tbody></tbody></table></div>
+  </div>
+</div>
+
+<script>
+// ===== Register Datalabels Plugin =====
+Chart.register(ChartDataLabels);
+Chart.defaults.set('plugins.datalabels', { display: false });
+
+// ===== State =====
+let engine = null;
+let currentFilters = {};
+let charts = {};
+const WEEK_NAMES = [];
+let tableSortState = {};
+let cachedCatTrend = null;
+let cachedSkuTrend = null;
+
+// ===== Color Palette =====
+const CP = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#2980b9','#c0392b','#16a085','#8e44ad','#27ae60','#d35400','#7f8c8d','#2c3e50'];
+
+// ===== Conditional Formatting Metrics =====
+const COND_METRICS = ['SPEND$','CLICKS','已订购商品数量','CTR%','$CPC','ROAS','ACOS%','T-CVR%','funding%','折扣%','$CPO','RRP','实际成交价','理论成交价','funding','Total ads Units','Total ads Sales$','已订购商品销售额','IMPRESSIONS'];
+
+// ===== Custom Dropdown =====
+function buildFilterPanel(data) {
+  const panel = document.getElementById('filterPanel');
+  let html = '<div class="filter-row"><div class="section-label">基础信息筛选</div></div><div class="filter-row">';
+  html += buildFilterDropdown('biz_group', '业务组', data.biz_group || []);
+  html += buildFilterDropdown('category', '三级分类', data.category || []);
+  html += buildFilterDropdown('bu', 'BU', data.bu || []);
+  html += buildFilterDropdown('sku', '最早SKU', data.sku || [], true);
+  html += buildFilterDropdown('listing', 'Listing标识', data.listing || []);
+  html += '</div>';
+  html += '<div class="filter-row" style="margin-top:8px;"><div class="section-label">时间维度筛选</div></div><div class="filter-row">';
+  html += buildFilterDropdown('month', '月', data.month || []);
+  html += buildFilterDropdown('week', '周', data.week || []);
+  html += buildFilterDropdown('day', '按天', data.day || [], true);
+  html += '<div class="btn-row"><button class="btn btn-primary" onclick="applyAllFilters()">应用筛选</button><button class="btn btn-outline" onclick="resetFilters()">重置</button></div>';
+  html += '</div>';
+  panel.innerHTML = html;
+  if (data.week) { WEEK_NAMES.length = 0; WEEK_NAMES.push(...data.week); }
+}
+
+function buildFilterDropdown(key, label, options, searchable) {
+  const uid = 'filter_' + key;
+  let html = '<div class="filter-group">';
+  html += '<label>' + label + '</label>';
+  html += '<button class="dropdown-btn" id="' + uid + '_btn" data-key="' + key + '" onclick="toggleDropdown(\'' + uid + '\')">全部</button>';
+  html += '<div class="dropdown-panel" id="' + uid + '_panel">';
+  if (searchable || options.length > 10) {
+    html += '<div class="dropdown-search"><input type="text" placeholder="搜索..." oninput="filterDropdownOptions(\'' + uid + '\', this.value)"></div>';
+  }
+  html += '<div class="dropdown-actions"><button onclick="selectAllDropdown(\'' + uid + '\', true)">全选</button><button onclick="selectAllDropdown(\'' + uid + '\', false)">清除</button></div>';
+  html += '<div class="dropdown-list" id="' + uid + '_list">';
+  options.forEach(v => {
+    html += '<label class="dropdown-item"><input type="checkbox" value="' + escapeHtml(v) + '" onchange="updateDropdownBtn(\'' + uid + '\')"><span>' + escapeHtml(v) + '</span></label>';
+  });
+  html += '</div></div></div>';
+  return html;
+}
+
+function populateDropdownList(uid, options) {
+  const list = document.getElementById(uid + '_list');
+  list.innerHTML = options.map(v =>
+    '<label class="dropdown-item"><input type="checkbox" value="' + escapeHtml(v) + '" onchange="updateDropdownBtn(\'' + uid + '\')"><span>' + escapeHtml(v) + '</span></label>'
+  ).join('');
+}
+
+function toggleDropdown(uid) {
+  const panel = document.getElementById(uid + '_panel');
+  const btn = document.getElementById(uid + '_btn');
+  const isOpen = panel.classList.contains('show');
+  document.querySelectorAll('.dropdown-panel.show').forEach(p => p.classList.remove('show'));
+  document.querySelectorAll('.dropdown-btn.active').forEach(b => b.classList.remove('active'));
+  if (!isOpen) { panel.classList.add('show'); btn.classList.add('active'); }
+}
+
+function filterDropdownOptions(uid, query) {
+  query = query.toLowerCase();
+  document.querySelectorAll('#' + uid + '_list .dropdown-item').forEach(item => {
+    const text = item.querySelector('span').textContent.toLowerCase();
+    item.style.display = text.includes(query) ? '' : 'none';
+  });
+}
+
+function selectAllDropdown(uid, select) {
+  document.querySelectorAll('#' + uid + '_list input[type="checkbox"]').forEach(cb => {
+    if (cb.closest('.dropdown-item').style.display !== 'none') cb.checked = select;
+  });
+  updateDropdownBtn(uid);
+}
+
+function updateDropdownBtn(uid) {
+  const checked = document.querySelectorAll('#' + uid + '_list input[type="checkbox"]:checked');
+  const btn = document.getElementById(uid + '_btn');
+  if (checked.length === 0) { btn.innerHTML = '全部'; }
+  else if (checked.length === 1) { btn.innerHTML = escapeHtml(checked[0].value); }
+  else { btn.innerHTML = escapeHtml(checked[0].value) + ' <span class="dropdown-count">+' + (checked.length - 1) + '</span>'; }
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.filter-group')) {
+    document.querySelectorAll('.dropdown-panel.show').forEach(p => p.classList.remove('show'));
+    document.querySelectorAll('.dropdown-btn.active').forEach(b => b.classList.remove('active'));
+  }
+});
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function getSelectedValues(uid) {
+  return Array.from(document.querySelectorAll('#' + uid + '_list input[type="checkbox"]:checked')).map(cb => cb.value);
+}
+
+function syncTopSkusToLocalDropdown(topSkus) {
+  const uid = 'filter_skuTrendSel';
+  document.querySelectorAll('#' + uid + '_list input[type="checkbox"]').forEach(cb => {
+    cb.checked = topSkus.includes(cb.value);
+  });
+  updateDropdownBtn(uid);
+}
+
+function applyAllFilters() {
+  const keys = ['biz_group', 'category', 'bu', 'sku', 'listing', 'month', 'week', 'day'];
+  const params = {};
+  keys.forEach(k => { const vals = getSelectedValues('filter_' + k); if (vals.length > 0) params[k] = vals.join(','); });
+  currentFilters = params;
+  loadAll(params);
+}
+
+function resetFilters() {
+  const keys = ['biz_group', 'category', 'bu', 'sku', 'listing', 'month', 'week', 'day'];
+  keys.forEach(k => { const uid = 'filter_' + k; document.querySelectorAll('#' + uid + '_list input[type="checkbox"]').forEach(cb => cb.checked = false); updateDropdownBtn(uid); });
+  currentFilters = {};
+  loadAll({});
+}
+
+function loadAll(params) {
+  showLoading(true);
+  try {
+    const mask = engine.applyFilters(params);
+    const weekly = engine.apiWeekly(mask);
+    const price = engine.apiPrice(mask);
+    const activity = engine.apiActivity(mask);
+    const summary = engine.apiSummary(mask);
+    const discSummary = engine.apiDiscountSummary(mask);
+    const promoSummary = engine.apiPromoSummary(mask);
+    const listingSummary = engine.apiListingSummary(mask);
+    const catTrend = engine.apiCatFundingTrend(mask);
+    const discTrend = engine.apiDiscountTrend(mask);
+    renderKPIs(weekly); renderChart1(weekly); renderChart2(weekly);
+    renderPricePivot(price); renderActivityPivot(activity);
+    cachedCatTrend = catTrend;
+    renderSummaryTable(summary); renderDiscountSummaryTable(discSummary);
+    renderPromoSummaryTable(promoSummary); renderListingSummaryTable(listingSummary);
+    populateCatTrendDropdown(catTrend);
+    populateWeekDropdowns(catTrend);
+    renderCatFundingTrend(); renderDiscountTrend(discTrend);
+    // Link: refresh SKU trend, SKU detail, Listing detail
+    renderSkuFundingTrend(true);
+    loadSkuDetail(true); loadListingDetail(true);
+  } catch(e) { console.error('Load error:', e); alert('数据加载失败: ' + e.message); }
+  showLoading(false);
+}
+
+function showLoading(show) { document.getElementById('loadingOverlay').classList.toggle('active', show); }
+
+function renderKPIs(data) {
+  const kpis = [
+    {label:'总订购数量', value: fmtInt(sum(data['已订购商品数量'])), unit:'件', cls:''},
+    {label:'总营销花费', value:'$'+fmtNum(sum(data['SPEND$'])), unit:'', cls:'accent-blue'},
+    {label:'平均促销%', value:fmtNum(avgNonZero(data['促销%']))+'%', unit:'', cls:'accent-red'},
+    {label:'平均营销%', value:fmtNum(avgNonZero(data['营销%']))+'%', unit:'', cls:'accent-red'},
+    {label:'平均ROAS', value:fmtNum(avgNonZero(data['ROAS'])), unit:'', cls:'accent-green'},
+    {label:'平均ACOS%', value:fmtNum(avgNonZero(data['ACOS%']))+'%', unit:'', cls:''},
+  ];
+  document.getElementById('kpiRow').innerHTML = kpis.map(k =>
+    '<div class="kpi-card ' + k.cls + '"><div class="label">' + k.label + '</div><div class="value">' + k.value + '</div><div class="unit">' + k.unit + '</div></div>'
+  ).join('');
+}
+
+function sum(arr) { return arr.reduce((a,b)=>a+b, 0); }
+function avgNonZero(arr) { const f = arr.filter(v=>v>0); return f.length ? f.reduce((a,b)=>a+b,0)/f.length : 0; }
+function fmtInt(n) { return Math.round(n).toLocaleString('en-US'); }
+function fmtNum(n) { return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+</script>
+
+<script>
+// ===== Chart Rendering =====
+Chart.defaults.font.family = "'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.color = '#2c3e50';
+
+const NO_GRID = { grid: { display: false }, border: { display: false } };
+const TOOLTIP_CFG = {
+  backgroundColor: 'rgba(26,37,46,0.92)', titleColor: '#fff', bodyColor: '#fff',
+  borderColor: 'rgba(52,152,219,0.4)', borderWidth: 1, cornerRadius: 8, padding: 10, displayColors: true
+};
+
+function renderChart1(data) {
+  const ctx = document.getElementById('chart1');
+  if (charts.chart1) charts.chart1.destroy();
+  charts.chart1 = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: data.weeks, datasets: [
+      { type: 'bar', label: '已订购商品数量', data: data['已订购商品数量'], backgroundColor: 'rgba(52,152,219,0.65)', borderColor: 'rgba(41,128,185,1)', borderWidth: 1, yAxisID: 'y', order: 2 },
+      { type: 'line', label: 'SPEND$', data: data['SPEND$'], borderColor: 'rgba(231,76,60,1)', backgroundColor: 'rgba(231,76,60,0.1)', borderWidth: 2.5, tension: 0.3, pointRadius: 3, pointBackgroundColor: 'rgba(231,76,60,1)', yAxisID: 'y1', order: 1 }
+    ]},
+    options: { responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: { x: NO_GRID, y: { ...NO_GRID, position: 'left', title: { display: true, text: '已订购商品数量', font:{size:12} }, beginAtZero: true },
+                y1: { ...NO_GRID, position: 'right', title: { display: true, text: 'SPEND$ (USD)', font:{size:12} }, beginAtZero: true } },
+      plugins: { datalabels: { display: false },
+        legend: { position: 'top', labels: { boxWidth: 12, padding: 10 } },
+        tooltip: { ...TOOLTIP_CFG, callbacks: { label: function(ctx) {
+          let val = ctx.parsed.y;
+          if (ctx.dataset.label === 'SPEND$') return ctx.dataset.label + ': $' + val.toLocaleString(undefined,{minimumFractionDigits:2});
+          return ctx.dataset.label + ': ' + val.toLocaleString(); } } } }
+    }
+  });
+}
+
+function renderChart2(data) {
+  const ctx = document.getElementById('chart2');
+  if (charts.chart2) charts.chart2.destroy();
+  charts.chart2 = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: data.weeks, datasets: [
+      { type: 'bar', label: '促销%', data: data['促销%'], backgroundColor: 'rgba(241,196,15,0.65)', borderColor: 'rgba(243,156,18,1)', borderWidth: 1, order: 2 },
+      { type: 'line', label: '营销%', data: data['营销%'], borderColor: 'rgba(155,89,182,1)', backgroundColor: 'rgba(155,89,182,0.1)', borderWidth: 2.5, tension: 0.3, pointRadius: 3, pointBackgroundColor: 'rgba(155,89,182,1)', order: 1 }
+    ]},
+    options: { responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: { x: NO_GRID, y: { ...NO_GRID, title: { display: true, text: '百分比 (%)', font:{size:12} }, beginAtZero: true } },
+      plugins: { datalabels: { display: false },
+        legend: { position: 'top', labels: { boxWidth: 12, padding: 10 } },
+        tooltip: { ...TOOLTIP_CFG, callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2) + '%' } } }
+    }
+  });
+}
+
+function renderPricePivot(data) {
+  const ctx = document.getElementById('chart3');
+  if (charts.chart3) charts.chart3.destroy();
+  const colors = ['rgba(231,76,60,0.7)','rgba(52,152,219,0.7)','rgba(46,204,113,0.7)','rgba(241,196,15,0.7)','rgba(155,89,182,0.7)','rgba(230,126,34,0.7)'];
+  const datasets = data.price_types.map((pt, i) => ({
+    label: pt, data: data.data[pt],
+    backgroundColor: colors[i % colors.length], borderColor: colors[i % colors.length].replace('0.7','1'), borderWidth: 1
+  }));
+  charts.chart3 = new Chart(ctx, { type:'bar', data:{labels:data.weeks,datasets},
+    options:{ responsive:true,maintainAspectRatio:false,indexAxis:'y', interaction:{mode:'index',intersect:false},
+      scales:{ x:{stacked:true,title:{display:true,text:'最早SKU去重计数'},beginAtZero:true,...NO_GRID}, y:{stacked:true,...NO_GRID} },
+      plugins:{
+        datalabels: { display: false },
+        legend:{position:'top',labels:{boxWidth:12,padding:8}},
+        tooltip:{...TOOLTIP_CFG, callbacks:{
+          title: function(items) {
+            const di = items[0].dataIndex;
+            const total = datasets.reduce((s, ds) => s + (ds.data[di] || 0), 0);
+            return items[0].label + '  (合计: ' + total + ')';
+          },
+          label:function(ctx) {
+          const dsets = ctx.chart.data.datasets;
+          const di = ctx.dataIndex;
+          const total = dsets.reduce((s, ds) => s + (ds.data[di] || 0), 0);
+          const pct = total > 0 ? Math.round(ctx.parsed.x / total * 100) : 0;
+          return ctx.dataset.label + ': ' + ctx.parsed.x + ' | ' + pct + '%';
+        }}}
+      }
+    }});
+}
+
+function renderActivityPivot(data) {
+  const ctx = document.getElementById('chart4');
+  if (charts.chart4) charts.chart4.destroy();
+  const colors = ['rgba(149,165,166,0.7)','rgba(52,152,219,0.7)','rgba(231,76,60,0.7)','rgba(241,196,15,0.7)','rgba(46,204,113,0.7)','rgba(155,89,182,0.7)','rgba(230,126,34,0.7)','rgba(26,188,156,0.7)'];
+  const datasets = data.activities.map((a, i) => ({
+    label: a, data: data.data[a],
+    backgroundColor: colors[i % colors.length], borderColor: colors[i % colors.length].replace('0.7','1'), borderWidth: 1
+  }));
+  charts.chart4 = new Chart(ctx, { type:'bar', data:{labels:data.weeks,datasets},
+    options:{ responsive:true,maintainAspectRatio:false,indexAxis:'y', interaction:{mode:'index',intersect:false},
+      scales:{ x:{stacked:true,title:{display:true,text:'最早SKU去重计数'},beginAtZero:true,...NO_GRID}, y:{stacked:true,...NO_GRID} },
+      plugins:{
+        datalabels: { display: false },
+        legend:{position:'top',labels:{boxWidth:12,padding:8}},
+        tooltip:{...TOOLTIP_CFG, callbacks:{
+          title: function(items) {
+            const di = items[0].dataIndex;
+            const total = datasets.reduce((s, ds) => s + (ds.data[di] || 0), 0);
+            return items[0].label + '  (合计: ' + total + ')';
+          },
+          label:function(ctx) {
+          const dsets = ctx.chart.data.datasets;
+          const di = ctx.dataIndex;
+          const total = dsets.reduce((s, ds) => s + (ds.data[di] || 0), 0);
+          const pct = total > 0 ? Math.round(ctx.parsed.x / total * 100) : 0;
+          return ctx.dataset.label + ': ' + ctx.parsed.x + ' | ' + pct + '%';
+        }}}
+      }
+    }});
+}
+</script>
+
+<script>
+// ===== 大板块3: Tables & Conditional Formatting =====
+function formatCell(h, v) {
+  if (typeof v !== 'number') return {text: v || '', cls: ''};
+  let cls = '';
+  if (h.includes('环比') || (h.includes('%') && !h.includes('funding'))) {
+    cls = v > 0 ? 'pos-val' : (v < 0 ? 'neg-val' : '');
+    return {text: (v >= 0 ? '+' : '') + v.toFixed(2) + '%', cls};
+  }
+  if (h.includes('SPEND') || h.includes('Sales') || h.includes('$CPC') || h.includes('$CPO') || h.includes('促销费') || h.includes('销售额') || h.includes('RRP') || h.includes('成交价') || h === 'funding' || h.includes('funding_num') || h.includes('ROAS') || h.includes('ACOS')) {
+    return {text: v.toFixed(2), cls};
+  }
+  if (h.includes('数量') || h.includes('Units') || h.includes('Orders') || h.includes('CLICKS') || h.includes('IMPRESSIONS') || h.includes('浏览') || h.includes('计数') || h.includes('SKU去重')) {
+    return {text: Math.round(v).toLocaleString(), cls};
+  }
+  if (h.includes('CTR') || h.includes('CVR') || h.includes('CR') || h.includes('funding%') || h.includes('折扣')) {
+    cls = v > 0 ? 'pos-val' : (v < 0 ? 'neg-val' : '');
+    return {text: v.toFixed(2) + '%', cls};
+  }
+  return {text: v.toFixed(2), cls};
+}
+
+function renderTable(tableId, headers, rows, infoId) {
+  const thead = document.querySelector('#' + tableId + ' thead');
+  const tbody = document.querySelector('#' + tableId + ' tbody');
+  if (!thead || !tbody) return;
+  if (!rows.length) { thead.innerHTML = ''; tbody.innerHTML = '<tr><td colspan="99">无数据</td></tr>'; return; }
+
+  thead.innerHTML = '<tr>' + headers.map((h, i) =>
+    '<th onclick="sortTable(\'' + tableId + '\',' + i + ')" data-col="' + i + '">' + h + '<span class="sort-icon"></span></th>'
+  ).join('') + '</tr>';
+
+  const rawKey = '__raw_' + tableId;
+  window[rawKey] = { headers, rows };
+  tableSortState[tableId] = { col: null, dir: null };
+  renderTableBody(tableId, headers, rows);
+  applyCondFormat(tableId, headers);
+
+  if (infoId) document.getElementById(infoId).textContent = '共 ' + rows.length + ' 行';
+}
+
+function renderTableBody(tableId, headers, rows) {
+  const tbody = document.querySelector('#' + tableId + ' tbody');
+  tbody.innerHTML = rows.map(row => {
+    if (row._truncated) return '<tr><td colspan="99" style="text-align:center;color:#e74c3c;">数据已截断，仅显示前5000行</td></tr>';
+    let cells = '';
+    for (const h of headers) {
+      const fc = formatCell(h, row[h]);
+      cells += '<td class="' + fc.cls + '" data-metric="' + h + '" data-raw="' + (typeof row[h] === 'number' ? row[h] : '') + '">' + fc.text + '</td>';
+    }
+    return '<tr>' + cells + '</tr>';
+  }).join('');
+}
+
+function applyCondFormat(tableId, headers) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  const metricCols = COND_METRICS.filter(m => headers.includes(m));
+  if (metricCols.length === 0) return;
+
+  // Build column index map
+  const colIdxMap = {};
+  headers.forEach((h, i) => {
+    if (metricCols.includes(h)) colIdxMap[h] = i;
+  });
+
+  // For each metric column, collect raw values, find tertiles, apply classes
+  const tbody = table.querySelector('tbody');
+  const allRows = tbody.querySelectorAll('tr');
+
+  for (const h of metricCols) {
+    const ci = colIdxMap[h];
+    if (ci === undefined) continue;
+
+    // Collect raw numeric values
+    const vals = [];
+    allRows.forEach(row => {
+      const td = row.children[ci];
+      if (!td) return;
+      const raw = parseFloat(td.getAttribute('data-raw'));
+      if (!isNaN(raw) && raw !== 0) vals.push({ row, td, raw });
+    });
+
+    if (vals.length < 3) continue;
+
+    // Sort to find tertile boundaries
+    const sortedVals = vals.map(v => v.raw).sort((a, b) => a - b);
+    const n = sortedVals.length;
+    const t1 = sortedVals[Math.floor(n / 3)];
+    const t2 = sortedVals[Math.floor(2 * n / 3)];
+
+    vals.forEach(({ row, td, raw }) => {
+      // Remove existing cond classes
+      td.classList.remove('cond-lo', 'cond-mid', 'cond-hi');
+      if (raw === 0) return;
+      if (raw <= t1) td.classList.add('cond-lo');
+      else if (raw <= t2) td.classList.add('cond-mid');
+      else td.classList.add('cond-hi');
+    });
+  }
+}
+
+function sortTable(tableId, colIdx) {
+  const rawKey = '__raw_' + tableId;
+  const data = window[rawKey];
+  if (!data) return;
+  const { headers, rows } = data;
+  const state = tableSortState[tableId] || { col: null, dir: null };
+
+  let newDir = 'asc';
+  if (state.col === colIdx) {
+    newDir = state.dir === 'asc' ? 'desc' : (state.dir === 'desc' ? null : 'asc');
+  }
+
+  const thead = document.querySelector('#' + tableId + ' thead');
+  thead.querySelectorAll('th').forEach(th => { th.classList.remove('sorted-asc', 'sorted-desc'); });
+  if (newDir) {
+    thead.querySelectorAll('th')[colIdx].classList.add('sorted-' + newDir);
+  }
+
+  tableSortState[tableId] = { col: colIdx, dir: newDir };
+
+  if (!newDir) {
+    renderTableBody(tableId, headers, rows);
+    applyCondFormat(tableId, headers);
+    return;
+  }
+
+  const sorted = [...rows].sort((a, b) => {
+    let va = a[headers[colIdx]], vb = b[headers[colIdx]];
+    if (typeof va === 'string') va = va.toLowerCase();
+    if (typeof vb === 'string') vb = vb.toLowerCase();
+    if (va == null) va = '';
+    if (vb == null) vb = '';
+    if (va < vb) return newDir === 'asc' ? -1 : 1;
+    if (va > vb) return newDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  renderTableBody(tableId, headers, sorted);
+  applyCondFormat(tableId, headers);
+}
+
+function renderSummaryTable(d) { if (d.rows && d.rows.length) renderTable('summaryTable', Object.keys(d.rows[0]), d.rows, 'summaryInfo'); }
+function renderDiscountSummaryTable(d) { if (d.rows && d.rows.length) renderTable('discTable', Object.keys(d.rows[0]), d.rows, 'discInfo'); }
+function renderPromoSummaryTable(d) { if (d.rows && d.rows.length) renderTable('promoTable', Object.keys(d.rows[0]), d.rows, 'promoInfo'); }
+function renderListingSummaryTable(d) { if (d.rows && d.rows.length) renderTable('listingTable', Object.keys(d.rows[0]), d.rows, 'listingInfo'); }
+
+// ===== Trend Chart Dropdowns =====
+function populateCatTrendDropdown(data) {
+  if (!data || !data.datasets) return;
+  const cats = data.datasets.map(ds => ds.label);
+  populateDropdownList('filter_catTrendSel', cats);
+  // Select top 5
+  const list = document.getElementById('filter_catTrendSel_list');
+  for (let i = 0; i < Math.min(5, list.querySelectorAll('input').length); i++) {
+    list.querySelectorAll('input')[i].checked = true;
+  }
+  updateDropdownBtn('filter_catTrendSel');
+}
+
+function populateWeekDropdowns(data) {
+  if (!data || !data.weeks) return;
+  populateDropdownList('filter_catTrendWk', data.weeks);
+  populateDropdownList('filter_skuTrendWk', data.weeks);
+  updateDropdownBtn('filter_catTrendWk');
+  updateDropdownBtn('filter_skuTrendWk');
+}
+
+function populateSkuTrendDropdown(data) {
+  if (!data || !data.datasets) return;
+  const skus = data.datasets.map(ds => ds.label);
+  populateDropdownList('filter_skuTrendSel', skus);
+  const list = document.getElementById('filter_skuTrendSel_list');
+  for (let i = 0; i < Math.min(5, list.querySelectorAll('input').length); i++) {
+    list.querySelectorAll('input')[i].checked = true;
+  }
+  updateDropdownBtn('filter_skuTrendSel');
+}
+
+function renderCatFundingTrend() {
+  if (!cachedCatTrend) return;
+  const selectedCats = getSelectedValues('filter_catTrendSel');
+  const selectedWks = getSelectedValues('filter_catTrendWk');
+
+  const weeks = selectedWks.length > 0 ? cachedCatTrend.weeks.filter(w => selectedWks.includes(w)) : cachedCatTrend.weeks;
+  const wkIdxMap = {};
+  cachedCatTrend.weeks.forEach((w, i) => { wkIdxMap[w] = i; });
+  const wkIndices = weeks.map(w => wkIdxMap[w]);
+
+  const ctx = document.getElementById('catTrendChart');
+  if (charts.catTrend) charts.catTrend.destroy();
+  const datasets = cachedCatTrend.datasets.filter(ds => selectedCats.length === 0 || selectedCats.includes(ds.label)).map((ds, i) => ({
+    label: ds.label,
+    data: wkIndices.map(wi => ds.data[wi]),
+    borderColor: CP[i % CP.length],
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    tension: 0.2,
+    pointRadius: 3,
+    pointBackgroundColor: CP[i % CP.length]
+  }));
+  charts.catTrend = new Chart(ctx, { type:'line', data:{labels:weeks,datasets},
+    options:{ responsive:true,maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+      scales:{ x:NO_GRID, y:{...NO_GRID, title:{display:true,text:'funding% (%)'},beginAtZero:true} },
+      plugins:{
+        datalabels: {
+          display: true, color: '#555', anchor: 'end', align: 'top', offset: 2,
+          font: { size: 9 },
+          formatter: v => v > 0 ? v.toFixed(1) + '%' : ''
+        },
+        legend:{position:'right',labels:{boxWidth:12,padding:8,font:{size:10}}},
+        tooltip:{...TOOLTIP_CFG, callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toFixed(2)+'%'}}
+      }
+    }});
+}
+
+function renderSkuFundingTrend(skipLoading) {
+  const selectedWks = getSelectedValues('filter_skuTrendWk');
+
+  let params = {...currentFilters};
+
+  // Sync: top-level SKU filter takes priority over local dropdown
+  const topSkus = currentFilters.sku ? currentFilters.sku.split(',') : [];
+  if (topSkus.length > 0) {
+    params.sku = topSkus.join(',');
+  } else {
+    const selectedSkus = getSelectedValues('filter_skuTrendSel');
+    if (selectedSkus.length > 0) params.sku = selectedSkus.join(',');
+  }
+
+  if (!skipLoading) showLoading(true);
+  try {
+    const mask = engine.applyFilters(params);
+    const data = engine.apiSkuFundingTrend(mask);
+    cachedSkuTrend = data;
+    populateSkuTrendDropdown(data);
+    // Sync top-level SKU selection to local dropdown checkboxes
+    if (topSkus.length > 0) {
+      syncTopSkusToLocalDropdown(topSkus);
+    }
+
+    const weeks = selectedWks.length > 0 ? data.weeks.filter(w => selectedWks.includes(w)) : data.weeks;
+    const wkIdxMap = {};
+    data.weeks.forEach((w, i) => { wkIdxMap[w] = i; });
+    const wkIndices = weeks.map(w => wkIdxMap[w]);
+
+    const ctx = document.getElementById('skuTrendChart');
+    if (charts.skuTrend) charts.skuTrend.destroy();
+
+    // Determine which SKUs to display
+    const localSkus = getSelectedValues('filter_skuTrendSel');
+    let activeSkus;
+    if (topSkus.length > 0) {
+      activeSkus = topSkus;
+    } else if (localSkus.length > 0) {
+      activeSkus = localSkus;
+    } else {
+      activeSkus = data.datasets.map(ds => ds.label);
+    }
+    const datasets = data.datasets.filter(ds => activeSkus.includes(ds.label)).map((ds, i) => ({
+      label: ds.label,
+      data: wkIndices.map(wi => ds.data[wi]),
+      borderColor: CP[i % CP.length],
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      tension: 0.2,
+      pointRadius: 3,
+      pointBackgroundColor: CP[i % CP.length]
+    }));
+
+    charts.skuTrend = new Chart(ctx,{type:'line',data:{labels:weeks,datasets},
+      options:{ responsive:true,maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+        scales:{ x:NO_GRID, y:{...NO_GRID, title:{display:true,text:'funding% (%)'},beginAtZero:true} },
+        plugins:{
+          datalabels: {
+            display: true, color: '#555', anchor: 'end', align: 'top', offset: 2,
+            font: { size: 9 },
+            formatter: v => v > 0 ? v.toFixed(1) + '%' : ''
+          },
+          legend:{position:'right',labels:{boxWidth:12,padding:8,font:{size:10}}},
+          tooltip:{...TOOLTIP_CFG, callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toFixed(2)+'%'}}
+        }
+      }});
+  } catch(e){console.error(e);}
+  if (!skipLoading) showLoading(false);
+}
+
+function renderDiscountTrend(data) {
+  if (!data || !data.weeks) return;
+  const ctx = document.getElementById('discTrendChart');
+  if (charts.discTrend) charts.discTrend.destroy();
+  const bc = ['rgba(46,204,113,0.7)','rgba(52,152,219,0.7)','rgba(241,196,15,0.7)','rgba(230,126,34,0.7)','rgba(231,76,60,0.7)','rgba(155,89,182,0.7)','rgba(192,57,43,0.7)','rgba(127,140,141,0.7)'];
+  const datasets = data.datasets.map((ds,i)=>({label:ds.label,data:ds.data,backgroundColor:bc[i%bc.length],borderColor:bc[i%bc.length].replace('0.7','1'),borderWidth:1}));
+  charts.discTrend = new Chart(ctx,{type:'bar',data:{labels:data.weeks,datasets},
+    options:{ responsive:true,maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+      scales:{ x:{stacked:true,...NO_GRID}, y:{stacked:true,title:{display:true,text:'最早SKU去重计数'},beginAtZero:true,...NO_GRID} },
+      plugins:{ datalabels: { display: false },
+        legend:{position:'top',labels:{boxWidth:12,padding:8}}, tooltip:{...TOOLTIP_CFG, callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toLocaleString()}} } }});
+}
+
+function loadSkuDetail(skipLoading) {
+  const td = document.getElementById('skuDetailTimeDim').value;
+  if (!skipLoading) showLoading(true);
+  try {
+    const mask = engine.applyFilters(currentFilters);
+    const d = engine.apiSkuDetail(mask, {time_dim: td, ...currentFilters});
+    if (d.rows && d.rows.length) renderTable('skuDetailTable', Object.keys(d.rows[0]), d.rows, 'skuDetailInfo');
+  } catch(e){console.error(e);}
+  if (!skipLoading) showLoading(false);
+}
+
+function loadListingDetail(skipLoading) {
+  const td = document.getElementById('listingDetailTimeDim').value;
+  if (!skipLoading) showLoading(true);
+  try {
+    const mask = engine.applyFilters(currentFilters);
+    const d = engine.apiListingDetail(mask, {time_dim: td, ...currentFilters});
+    if (d.rows && d.rows.length) renderTable('listingDetailTable', Object.keys(d.rows[0]), d.rows, 'listingDetailInfo');
+  } catch(e){console.error(e);}
+  if (!skipLoading) showLoading(false);
+}
+</script>
+
+<script>
+async function init() {
+  showLoading(true);
+  document.querySelector('.loading-text').textContent = '正在加载数据 (6.8MB)...';
+  try {
+    engine = new DataEngine();
+    await engine.init('meta.json', 'data.bin.gz');
+    document.querySelector('.loading-text').textContent = '正在渲染看板...';
+    const filterData = engine.getFilterOptions({});
+    buildFilterPanel(filterData);
+    loadAll({});
+  } catch(e) { console.error('Init error:', e); alert('初始化失败: ' + e.message); }
+  showLoading(false);
+}
+init();
+</script>
+</body>
+</html>
