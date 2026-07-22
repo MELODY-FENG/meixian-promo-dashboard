@@ -10,3 +10,4 @@ server_err.log
 *.csv
 *.csv.gz
 *.pkl
+data.parquet
