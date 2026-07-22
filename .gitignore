@@ -5,3 +5,7 @@ server_out.log
 server_err.log
 *.xlsx
 启动看板.bat
+data.parquet
+data.csv.gz
+data.csv
+data.pkl
